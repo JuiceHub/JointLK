@@ -294,7 +294,7 @@ def get_gpt_token_num():
 def load_bert_xlnet_roberta_input_tensors(statement_jsonl_path, model_type, model_name, max_seq_length):
     class InputExample(object):
 
-        def __init__(self, example_id, question, contexts, endings, surface, triples,
+        def __init__(self, example_id, question, contexts, endings, surface=None, triples=None,
                      label=None):
             self.example_id = example_id
             self.question = question
