@@ -294,12 +294,16 @@ def get_gpt_token_num():
 def load_bert_xlnet_roberta_input_tensors(statement_jsonl_path, model_type, model_name, max_seq_length):
     class InputExample(object):
 
-        def __init__(self, example_id, question, contexts, endings, label=None):
+        def __init__(self, example_id, question, contexts, endings, surface, triples,
+                     label=None):
             self.example_id = example_id
             self.question = question
             self.contexts = contexts
             self.endings = endings
             self.label = label
+            # add knowledge and triples
+            self.surface = surface
+            self.triples = triples
 
     class InputFeatures(object):
 
@@ -323,20 +327,18 @@ def load_bert_xlnet_roberta_input_tensors(statement_jsonl_path, model_type, mode
                 json_dic = json.loads(line)
                 label = ord(json_dic["answerKey"]) - ord("A") if 'answerKey' in json_dic else 0
                 contexts = json_dic["question"]["stem"]
-                if "para" in json_dic:
-                    contexts = json_dic["para"] + " " + contexts
-                if "fact1" in json_dic:
-                    contexts = json_dic["fact1"] + " " + contexts
-                ### 2021.12.19 contexts里加question_concept
-                # question_concept = json_dic["question"]["question_concept"]
-                # contexts = contexts + " " + question_concept
-                ############################
+                # if "para" in json_dic:
+                #     contexts = json_dic["para"] + " " + contexts
+                # if "fact1" in json_dic:
+                #     contexts = json_dic["fact1"] + " " + contexts
                 examples.append(
                     InputExample(
                         example_id=json_dic["id"],
                         contexts=[contexts] * len(json_dic["question"]["choices"]),
                         question="",
                         endings=[ending["text"] for ending in json_dic["question"]["choices"]],
+                        triples=[ending["triple"] if type(ending.get("triple")) is list else json_dic["fact1"] for
+                                 ending in json_dic["question"]["choices"]],
                         label=label
                     ))
         return examples
@@ -365,9 +367,20 @@ def load_bert_xlnet_roberta_input_tensors(statement_jsonl_path, model_type, mode
         features = []
         for ex_index, example in enumerate(tqdm(examples)):
             choices_features = []
-            for ending_idx, (context, ending) in enumerate(zip(example.contexts, example.endings)):
+            for ending_idx, (context, ending, tr) in enumerate(zip(example.contexts, example.endings, example.triples)):
+                # tokens_a = tokenizer.tokenize(context)
+                # tokens_b = tokenizer.tokenize(example.question + " " + ending)
+
+                context = context + " " + ending
                 tokens_a = tokenizer.tokenize(context)
-                tokens_b = tokenizer.tokenize(example.question + " " + ending)
+
+                tokens_b = ""
+                if tr:
+                    if type(tr) is list:
+                        triple = tr[0]
+                        tokens_b = tokenizer.tokenize(triple[0] + ' ' + triple[1] + ' ' + triple[2])
+                    else:
+                        tokens_b = tokenizer.tokenize(tr)
 
                 special_tokens_count = 4 if sep_token_extra else 3
                 _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - special_tokens_count)
