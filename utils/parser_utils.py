@@ -49,7 +49,8 @@ def add_data_arguments(parser):
     # dataset specific
     parser.add_argument('-ds', '--dataset', default='csqa', choices=DATASET_LIST, help='dataset name')
     parser.add_argument('-ih', '--inhouse', type=bool_flag, nargs='?', const=True, help='run in-house setting')
-    parser.add_argument('--inhouse_train_qids', default='data/{dataset}/inhouse_split_qids.txt', help='qids of the in-house training set')
+    parser.add_argument('--inhouse_train_qids', default='data/{dataset}/inhouse_split_qids.txt',
+                        help='qids of the in-house training set')
     # statements
     parser.add_argument('--train_statements', default='data/{dataset}/statement/train.statement.jsonl')
     parser.add_argument('--dev_statements', default='data/{dataset}/statement/dev.statement.jsonl')
@@ -72,7 +73,8 @@ def add_data_arguments(parser):
 
 def add_encoder_arguments(parser):
     parser.add_argument('-enc', '--encoder', default='bert-large-uncased', help='encoder type')
-    parser.add_argument('--encoder_layer', default=-1, type=int, help='encoder layer ID to use as features (used only by non-LSTM encoders)')
+    parser.add_argument('--encoder_layer', default=-1, type=int,
+                        help='encoder layer ID to use as features (used only by non-LSTM encoders)')
     parser.add_argument('-elr', '--encoder_lr', default=2e-5, type=float, help='learning rate')
     args, _ = parser.parse_known_args()
     parser.set_defaults(encoder_lr=ENCODER_DEFAULT_LR[args.dataset].get(args.encoder, ENCODER_DEFAULT_LR['default']))
@@ -80,14 +82,17 @@ def add_encoder_arguments(parser):
 
 def add_optimization_arguments(parser):
     parser.add_argument('--loss', default='cross_entropy', choices=['margin_rank', 'cross_entropy'], help='model type')
-    parser.add_argument('--optim', default='radam', choices=['sgd', 'adam', 'adamw', 'radam'], help='learning rate scheduler')
-    parser.add_argument('--lr_schedule', default='fixed', choices=['fixed', 'warmup_linear', 'warmup_constant'], help='learning rate scheduler')
+    parser.add_argument('--optim', default='radam', choices=['sgd', 'adam', 'adamw', 'radam'],
+                        help='learning rate scheduler')
+    parser.add_argument('--lr_schedule', default='fixed', choices=['fixed', 'warmup_linear', 'warmup_constant'],
+                        help='learning rate scheduler')
     parser.add_argument('-bs', '--batch_size', default=32, type=int)
     parser.add_argument('--warmup_steps', type=float, default=150)
     parser.add_argument('--max_grad_norm', default=1.0, type=float, help='max grad norm (0 to disable)')
     parser.add_argument('--weight_decay', default=1e-2, type=float, help='l2 weight decay strength')
     parser.add_argument('--n_epochs', default=100, type=int, help='total number of training epochs to perform.')
-    parser.add_argument('-me', '--max_epochs_before_stop', default=10, type=int, help='stop training if dev does not increase for N epochs')
+    parser.add_argument('-me', '--max_epochs_before_stop', default=10, type=int,
+                        help='stop training if dev does not increase for N epochs')
 
 
 def add_additional_arguments(parser):

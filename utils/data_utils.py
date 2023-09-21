@@ -3,6 +3,7 @@ import os
 import numpy as np
 import torch
 from transformers import (OpenAIGPTTokenizer, BertTokenizer, XLNetTokenizer, RobertaTokenizer, AutoTokenizer)
+
 try:
     from transformers import AlbertTokenizer
 except:
@@ -38,14 +39,14 @@ class MultiGPUSparseAdjDataBatchGenerator(object):
     def __iter__(self):
         bs = self.batch_size
         n = self.indexes.size(0)
-        if self.mode=='train' and self.args.drop_partial_batch:
-            print ('dropping partial batch')
-            n = (n//bs) *bs
-        elif self.mode=='train' and self.args.fill_partial_batch:
-            print ('filling partial batch')
+        if self.mode == 'train' and self.args.drop_partial_batch:
+            print('dropping partial batch')
+            n = (n // bs) * bs
+        elif self.mode == 'train' and self.args.fill_partial_batch:
+            print('filling partial batch')
             remain = n % bs
             if remain > 0:
-                extra = np.random.choice(self.indexes[:-remain], size=(bs-remain), replace=False)
+                extra = np.random.choice(self.indexes[:-remain], size=(bs - remain), replace=False)
                 self.indexes = torch.cat([self.indexes, torch.tensor(extra)])
                 n = self.indexes.size(0)
                 assert n % bs == 0
@@ -60,14 +61,15 @@ class MultiGPUSparseAdjDataBatchGenerator(object):
             batch_lists0 = [self._to_device([x[i] for i in batch_indexes], self.device0) for x in self.lists0]
             batch_lists1 = [self._to_device([x[i] for i in batch_indexes], self.device1) for x in self.lists1]
 
-
             edge_index_all, edge_type_all = self.adj_data
-            #edge_index_all: nested list of shape (n_samples, num_choice), where each entry is tensor[2, E]
-            #edge_type_all:  nested list of shape (n_samples, num_choice), where each entry is tensor[E, ]
+            # edge_index_all: nested list of shape (n_samples, num_choice), where each entry is tensor[2, E]
+            # edge_type_all:  nested list of shape (n_samples, num_choice), where each entry is tensor[E, ]
             edge_index = self._to_device([edge_index_all[i] for i in batch_indexes], self.device1)
-            edge_type  = self._to_device([edge_type_all[i] for i in batch_indexes], self.device1)
+            edge_type = self._to_device([edge_type_all[i] for i in batch_indexes], self.device1)
 
-            yield tuple([batch_qids, batch_labels, *batch_tensors0, *batch_lists0, *batch_tensors1, *batch_lists1, edge_index, edge_type])
+            yield tuple(
+                [batch_qids, batch_labels, *batch_tensors0, *batch_lists0, *batch_tensors1, *batch_lists1, edge_index,
+                 edge_type])
 
     def _to_device(self, obj, device):
         if isinstance(obj, (tuple, list)):
@@ -77,7 +79,7 @@ class MultiGPUSparseAdjDataBatchGenerator(object):
 
 
 def load_sparse_adj_data_with_contextnode(adj_pk_path, max_node_num, num_choice, args):
-    cache_path = adj_pk_path +'.loaded_cache'
+    cache_path = adj_pk_path + '.loaded_cache'
     use_cache = True
 
     if use_cache and not os.path.exists(cache_path):
@@ -85,28 +87,30 @@ def load_sparse_adj_data_with_contextnode(adj_pk_path, max_node_num, num_choice,
 
     if use_cache:
         with open(cache_path, 'rb') as f:
-            adj_lengths_ori, concept_ids, node_type_ids, node_scores, adj_lengths, edge_index, edge_type, half_n_rel = pickle.load(f)
+            adj_lengths_ori, concept_ids, node_type_ids, node_scores, adj_lengths, edge_index, edge_type, half_n_rel = pickle.load(
+                f)
     else:
         with open(adj_pk_path, 'rb') as fin:
             adj_concept_pairs = pickle.load(fin)
 
-        n_samples = len(adj_concept_pairs) #this is actually n_questions x n_choices
+        n_samples = len(adj_concept_pairs)  # this is actually n_questions x n_choices
         edge_index, edge_type = [], []
         adj_lengths = torch.zeros((n_samples,), dtype=torch.long)
         concept_ids = torch.full((n_samples, max_node_num), 1, dtype=torch.long)
-        node_type_ids = torch.full((n_samples, max_node_num), 2, dtype=torch.long) #default 2: "other node"
+        node_type_ids = torch.full((n_samples, max_node_num), 2, dtype=torch.long)  # default 2: "other node"
         node_scores = torch.zeros((n_samples, max_node_num, 1), dtype=torch.float)
 
         adj_lengths_ori = adj_lengths.clone()
         for idx, _data in tqdm(enumerate(adj_concept_pairs), total=n_samples, desc='loading adj matrices'):
-            adj, concepts, qm, am, cid2score = _data['adj'], _data['concepts'], _data['qmask'], _data['amask'], _data['cid2score']
-            #adj: e.g. <4233x249 (n_nodes*half_n_rels x n_nodes) sparse matrix of type '<class 'numpy.bool'>' with 2905 stored elements in COOrdinate format>
-            #concepts: np.array(num_nodes, ), where entry is concept id
-            #qm: np.array(num_nodes, ), where entry is True/False
-            #am: np.array(num_nodes, ), where entry is True/False
+            adj, concepts, qm, am, cid2score = _data['adj'], _data['concepts'], _data['qmask'], _data['amask'], _data[
+                'cid2score']
+            # adj: e.g. <4233x249 (n_nodes*half_n_rels x n_nodes) sparse matrix of type '<class 'numpy.bool'>' with 2905 stored elements in COOrdinate format>
+            # concepts: np.array(num_nodes, ), where entry is concept id
+            # qm: np.array(num_nodes, ), where entry is True/False
+            # am: np.array(num_nodes, ), where entry is True/False
             assert len(concepts) == len(set(concepts))
             qam = qm | am
-            #sanity check: should be T,..,T,F,F,..F
+            # sanity check: should be T,..,T,F,F,..F
             assert qam[0] == True
             F_start = False
             for TF in qam:
@@ -114,55 +118,59 @@ def load_sparse_adj_data_with_contextnode(adj_pk_path, max_node_num, num_choice,
                     F_start = True
                 else:
                     assert F_start == False
-            num_concept = min(len(concepts), max_node_num-1) + 1 #this is the final number of nodes including contextnode but excluding PAD
+            num_concept = min(len(concepts),
+                              max_node_num - 1) + 1  # this is the final number of nodes including contextnode but excluding PAD
             adj_lengths_ori[idx] = len(concepts)
             adj_lengths[idx] = num_concept
 
-            #Prepare nodes
-            concepts = concepts[:num_concept-1]
-            concept_ids[idx, 1:num_concept] = torch.tensor(concepts +1)  #To accomodate contextnode, original concept_ids incremented by 1
-            concept_ids[idx, 0] = 0 #this is the "concept_id" for contextnode
+            # Prepare nodes
+            concepts = concepts[:num_concept - 1]
+            concept_ids[idx, 1:num_concept] = torch.tensor(
+                concepts + 1)  # To accomodate contextnode, original concept_ids incremented by 1
+            concept_ids[idx, 0] = 0  # this is the "concept_id" for contextnode
 
-            #Prepare node scores
+            # Prepare node scores
             if (cid2score is not None):
                 for _j_ in range(num_concept):
                     _cid = int(concept_ids[idx, _j_]) - 1
                     assert _cid in cid2score
                     node_scores[idx, _j_, 0] = torch.tensor(cid2score[_cid])
 
-            #Prepare node types
-            node_type_ids[idx, 0] = 3 #contextnode
-            node_type_ids[idx, 1:num_concept][torch.tensor(qm, dtype=torch.bool)[:num_concept-1]] = 0
-            node_type_ids[idx, 1:num_concept][torch.tensor(am, dtype=torch.bool)[:num_concept-1]] = 1
+            # Prepare node types
+            node_type_ids[idx, 0] = 3  # contextnode
+            node_type_ids[idx, 1:num_concept][torch.tensor(qm, dtype=torch.bool)[:num_concept - 1]] = 0
+            node_type_ids[idx, 1:num_concept][torch.tensor(am, dtype=torch.bool)[:num_concept - 1]] = 1
 
-            #Load adj
-            ij = torch.tensor(adj.row, dtype=torch.int64) #(num_matrix_entries, ), where each entry is coordinate
-            k = torch.tensor(adj.col, dtype=torch.int64)  #(num_matrix_entries, ), where each entry is coordinate
+            # Load adj
+            ij = torch.tensor(adj.row, dtype=torch.int64)  # (num_matrix_entries, ), where each entry is coordinate
+            k = torch.tensor(adj.col, dtype=torch.int64)  # (num_matrix_entries, ), where each entry is coordinate
             n_node = adj.shape[1]
             half_n_rel = adj.shape[0] // n_node
             i, j = ij // n_node, ij % n_node
 
-            #Prepare edges
-            i += 2; j += 1; k += 1  # **** increment coordinate by 1, rel_id by 2 ****
+            # Prepare edges
+            i += 2;
+            j += 1;
+            k += 1  # **** increment coordinate by 1, rel_id by 2 ****
             extra_i, extra_j, extra_k = [], [], []
             for _coord, q_tf in enumerate(qm):
                 _new_coord = _coord + 1
                 if _new_coord > num_concept:
                     break
                 if q_tf:
-                    extra_i.append(0) #rel from contextnode to question concept
-                    extra_j.append(0) #contextnode coordinate
-                    extra_k.append(_new_coord) #question concept coordinate
+                    extra_i.append(0)  # rel from contextnode to question concept
+                    extra_j.append(0)  # contextnode coordinate
+                    extra_k.append(_new_coord)  # question concept coordinate
             for _coord, a_tf in enumerate(am):
                 _new_coord = _coord + 1
                 if _new_coord > num_concept:
                     break
                 if a_tf:
-                    extra_i.append(1) #rel from contextnode to answer concept
-                    extra_j.append(0) #contextnode coordinate
-                    extra_k.append(_new_coord) #answer concept coordinate
+                    extra_i.append(1)  # rel from contextnode to answer concept
+                    extra_j.append(0)  # contextnode coordinate
+                    extra_k.append(_new_coord)  # answer concept coordinate
 
-            half_n_rel += 2 #should be 19 now
+            half_n_rel += 2  # should be 19 now
             if len(extra_i) > 0:
                 i = torch.cat([i, torch.tensor(extra_i)], dim=0)
                 j = torch.cat([j, torch.tensor(extra_j)], dim=0)
@@ -171,33 +179,35 @@ def load_sparse_adj_data_with_contextnode(adj_pk_path, max_node_num, num_choice,
 
             mask = (j < max_node_num) & (k < max_node_num)
             i, j, k = i[mask], j[mask], k[mask]
-            i, j, k = torch.cat((i, i + half_n_rel), 0), torch.cat((j, k), 0), torch.cat((k, j), 0)  # add inverse relations
-            edge_index.append(torch.stack([j,k], dim=0)) #each entry is [2, E]
-            edge_type.append(i) #each entry is [E, ]
+            i, j, k = torch.cat((i, i + half_n_rel), 0), torch.cat((j, k), 0), torch.cat((k, j),
+                                                                                         0)  # add inverse relations
+            edge_index.append(torch.stack([j, k], dim=0))  # each entry is [2, E]
+            edge_type.append(i)  # each entry is [E, ]
 
         with open(cache_path, 'wb') as f:
-            pickle.dump([adj_lengths_ori, concept_ids, node_type_ids, node_scores, adj_lengths, edge_index, edge_type, half_n_rel], f)
+            pickle.dump([adj_lengths_ori, concept_ids, node_type_ids, node_scores, adj_lengths, edge_index, edge_type,
+                         half_n_rel], f)
 
-
-    ori_adj_mean  = adj_lengths_ori.float().mean().item()
-    ori_adj_sigma = np.sqrt(((adj_lengths_ori.float() - ori_adj_mean)**2).mean().item())
-    print('| ori_adj_len: mu {:.2f} sigma {:.2f} | adj_len: {:.2f} |'.format(ori_adj_mean, ori_adj_sigma, adj_lengths.float().mean().item()) +
+    ori_adj_mean = adj_lengths_ori.float().mean().item()
+    ori_adj_sigma = np.sqrt(((adj_lengths_ori.float() - ori_adj_mean) ** 2).mean().item())
+    print('| ori_adj_len: mu {:.2f} sigma {:.2f} | adj_len: {:.2f} |'.format(ori_adj_mean, ori_adj_sigma,
+                                                                             adj_lengths.float().mean().item()) +
           ' prune_rate： {:.2f} |'.format((adj_lengths_ori > adj_lengths).float().mean().item()) +
           ' qc_num: {:.2f} | ac_num: {:.2f} |'.format((node_type_ids == 0).float().sum(1).mean().item(),
                                                       (node_type_ids == 1).float().sum(1).mean().item()))
 
-    edge_index = list(map(list, zip(*(iter(edge_index),) * num_choice))) #list of size (n_questions, n_choices), where each entry is tensor[2, E] #this operation corresponds to .view(n_questions, n_choices)
-    edge_type = list(map(list, zip(*(iter(edge_type),) * num_choice))) #list of size (n_questions, n_choices), where each entry is tensor[E, ]
+    edge_index = list(map(list, zip(*(iter(
+        edge_index),) * num_choice)))  # list of size (n_questions, n_choices), where each entry is tensor[2, E] #this operation corresponds to .view(n_questions, n_choices)
+    edge_type = list(map(list, zip(*(iter(
+        edge_type),) * num_choice)))  # list of size (n_questions, n_choices), where each entry is tensor[E, ]
 
-    concept_ids, node_type_ids, node_scores, adj_lengths = [x.view(-1, num_choice, *x.size()[1:]) for x in (concept_ids, node_type_ids, node_scores, adj_lengths)]
-    #concept_ids: (n_questions, num_choice, max_node_num)
-    #node_type_ids: (n_questions, num_choice, max_node_num)
-    #node_scores: (n_questions, num_choice, max_node_num)
-    #adj_lengths: (n_questions,　num_choice)
-    return concept_ids, node_type_ids, node_scores, adj_lengths, (edge_index, edge_type) #, half_n_rel * 2 + 1
-
-
-
+    concept_ids, node_type_ids, node_scores, adj_lengths = [x.view(-1, num_choice, *x.size()[1:]) for x in
+                                                            (concept_ids, node_type_ids, node_scores, adj_lengths)]
+    # concept_ids: (n_questions, num_choice, max_node_num)
+    # node_type_ids: (n_questions, num_choice, max_node_num)
+    # node_scores: (n_questions, num_choice, max_node_num)
+    # adj_lengths: (n_questions,　num_choice)
+    return concept_ids, node_type_ids, node_scores, adj_lengths, (edge_index, edge_type)  # , half_n_rel * 2 + 1
 
 
 def load_gpt_input_tensors(statement_jsonl_path, max_seq_length):
@@ -219,7 +229,8 @@ def load_gpt_input_tensors(statement_jsonl_path, max_seq_length):
             for line in fin:
                 input_json = json.loads(line)
                 label = ord(input_json.get("answerKey", "A")) - ord("A")
-                output.append((input_json['id'], input_json["question"]["stem"], *[ending["text"] for ending in input_json["question"]["choices"]], label))
+                output.append((input_json['id'], input_json["question"]["stem"],
+                               *[ending["text"] for ending in input_json["question"]["choices"]], label))
         return output
 
     def pre_process_datasets(encoded_datasets, num_choices, max_seq_length, start_token, delimiter_token, clf_token):
@@ -269,7 +280,8 @@ def load_gpt_input_tensors(statement_jsonl_path, max_seq_length):
 
     encoded_dataset = tokenize_and_encode(tokenizer, dataset)
 
-    (input_ids, mc_token_ids, lm_labels, mc_labels), = pre_process_datasets([encoded_dataset], num_choices, max_seq_length, *special_tokens_ids)
+    (input_ids, mc_token_ids, lm_labels, mc_labels), = pre_process_datasets([encoded_dataset], num_choices,
+                                                                            max_seq_length, *special_tokens_ids)
     return examples_ids, mc_labels, input_ids, mc_token_ids, lm_labels
 
 
@@ -277,7 +289,6 @@ def get_gpt_token_num():
     tokenizer = OpenAIGPTTokenizer.from_pretrained('openai-gpt')
     tokenizer.add_tokens(GPT_SPECIAL_TOKENS)
     return len(tokenizer)
-
 
 
 def load_bert_xlnet_roberta_input_tensors(statement_jsonl_path, model_type, model_name, max_seq_length):
@@ -426,7 +437,8 @@ def load_bert_xlnet_roberta_input_tensors(statement_jsonl_path, model_type, mode
                 assert len(segment_ids) == max_seq_length
                 choices_features.append((tokens, input_ids, input_mask, segment_ids, output_mask))
             label = label_map[example.label]
-            features.append(InputFeatures(example_id=example.example_id, choices_features=choices_features, label=label))
+            features.append(
+                InputFeatures(example_id=example.example_id, choices_features=choices_features, label=label))
 
         return features
 
@@ -465,7 +477,8 @@ def load_bert_xlnet_roberta_input_tensors(statement_jsonl_path, model_type, mode
     tokenizer = tokenizer_class.from_pretrained(model_name)
     examples = read_examples(statement_jsonl_path)
     features = convert_examples_to_features(examples, list(range(len(examples[0].endings))), max_seq_length, tokenizer,
-                                            cls_token_at_end=bool(model_type in ['xlnet']),  # xlnet has a cls token at the end
+                                            cls_token_at_end=bool(model_type in ['xlnet']),
+                                            # xlnet has a cls token at the end
                                             cls_token=tokenizer.cls_token,
                                             sep_token=tokenizer.sep_token,
                                             sep_token_extra=bool(model_type in ['roberta', 'albert']),
@@ -476,7 +489,6 @@ def load_bert_xlnet_roberta_input_tensors(statement_jsonl_path, model_type, mode
     example_ids = [f.example_id for f in features]
     *data_tensors, all_label = convert_features_to_tensors(features)
     return (example_ids, all_label, *data_tensors)
-
 
 
 def load_input_tensors(input_jsonl_path, model_type, model_name, max_seq_length):

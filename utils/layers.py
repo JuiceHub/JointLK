@@ -133,7 +133,7 @@ class MeanPoolLayer(nn.Module):
             lengths = mask_or_lengths.float()
         else:
             mask, lengths = mask_or_lengths, (1 - mask_or_lengths.float()).sum(1)
-        
+
         # print("mask in MeanPoolLayer: ", mask.shape, mask)
         masked_inputs = inputs.masked_fill(mask.unsqueeze(-1).expand_as(inputs), 0.0)
         # print("masked_inputs in MeanPoolLayer: ", masked_inputs.shape, masked_inputs)
@@ -693,7 +693,6 @@ class CQAttention(torch.nn.Module):
         return softmax
 
 
-
 class BiAttention(torch.nn.Module):
     def __init__(self, block_hidden_dim):
         super().__init__()
@@ -729,12 +728,12 @@ class BiAttention(torch.nn.Module):
 
         A = torch.bmm(S1, Q)
         ### A:  torch.Size([5, 200, 200])
-        
-        B = torch.bmm(S2.transpose(1,2), C) #[5,100,200]
+
+        B = torch.bmm(S2.transpose(1, 2), C)  # [5,100,200]
         ### B:  torch.Size([5, 200, 200])
 
-        out1 = torch.cat([C, A], dim=2) #[5,200,400]
-        out2 = torch.cat([Q, B], dim=2) #[5,100,400]
+        out1 = torch.cat([C, A], dim=2)  # [5,200,400]
+        out2 = torch.cat([Q, B], dim=2)  # [5,100,400]
 
         return out1, S2, out2, S1
 
@@ -742,7 +741,6 @@ class BiAttention(torch.nn.Module):
 
         max_q_len = Q.size(-2)
         max_context_len = C.size(-2)
-
 
         subres0 = torch.matmul(C, self.w4C).expand([-1, -1, max_q_len])
         subres1 = torch.matmul(Q, self.w4Q).transpose(1, 2).expand([-1, max_context_len, -1])

@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from transformers import (OPENAI_GPT_PRETRAINED_CONFIG_ARCHIVE_MAP, BERT_PRETRAINED_CONFIG_ARCHIVE_MAP,
                           XLNET_PRETRAINED_CONFIG_ARCHIVE_MAP, ROBERTA_PRETRAINED_CONFIG_ARCHIVE_MAP)
+
 try:
     from transformers import ALBERT_PRETRAINED_CONFIG_ARCHIVE_MAP
 except:
@@ -20,13 +21,14 @@ MODEL_CLASS_TO_NAME = {
     'lstm': ['lstm'],
 }
 try:
-    MODEL_CLASS_TO_NAME['albert'] =  list(ALBERT_PRETRAINED_CONFIG_ARCHIVE_MAP.keys())
+    MODEL_CLASS_TO_NAME['albert'] = list(ALBERT_PRETRAINED_CONFIG_ARCHIVE_MAP.keys())
 except:
     pass
 
-MODEL_NAME_TO_CLASS = {model_name: model_class for model_class, model_name_list in MODEL_CLASS_TO_NAME.items() for model_name in model_name_list}
+MODEL_NAME_TO_CLASS = {model_name: model_class for model_class, model_name_list in MODEL_CLASS_TO_NAME.items() for
+                       model_name in model_name_list}
 
-#Add SapBERT configuration
+# Add SapBERT configuration
 model_name = 'cambridgeltl/SapBERT-from-PubMedBERT-fulltext'
 MODEL_NAME_TO_CLASS[model_name] = 'bert'
 
@@ -52,8 +54,10 @@ class LSTMTextEncoder(nn.Module):
             emb = nn.Embedding(vocab_size, emb_size)
         self.emb = EmbeddingDropout(emb, emb_p)
         self.rnns = nn.ModuleList([nn.LSTM(emb_size if l == 0 else hidden_size,
-                                           (hidden_size if l != num_layers else output_size) // (2 if bidirectional else 1),
-                                           1, bidirectional=bidirectional, batch_first=True) for l in range(num_layers)])
+                                           (hidden_size if l != num_layers else output_size) // (
+                                               2 if bidirectional else 1),
+                                           1, bidirectional=bidirectional, batch_first=True) for l in
+                                   range(num_layers)])
         self.pooler = self.pool_layer_classes[pool_function]()
 
         self.input_dropout = nn.Dropout(input_p)

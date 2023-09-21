@@ -3,7 +3,7 @@ import random
 try:
     from transformers import (ConstantLRSchedule, WarmupLinearSchedule, WarmupConstantSchedule)
 except:
-    from transformers import get_constant_schedule, get_constant_schedule_with_warmup,  get_linear_schedule_with_warmup
+    from transformers import get_constant_schedule, get_constant_schedule_with_warmup, get_linear_schedule_with_warmup
 
 from modeling.modeling_jointlk import *
 
@@ -20,11 +20,12 @@ from collections import defaultdict, OrderedDict
 import numpy as np
 
 import socket, os, subprocess, datetime
+
 print(socket.gethostname())
-print ("pid:", os.getpid())
-print ("conda env:", os.environ['CONDA_DEFAULT_ENV'])
-print ("screen: %s" % subprocess.check_output('echo $STY', shell=True).decode('utf'))
-print ("gpu: %s" % subprocess.check_output('echo $CUDA_VISIBLE_DEVICES', shell=True).decode('utf'))
+print("pid:", os.getpid())
+print("conda env:", os.environ['CONDA_DEFAULT_ENV'])
+print("screen: %s" % subprocess.check_output('echo $STY', shell=True).decode('utf'))
+print("gpu: %s" % subprocess.check_output('echo $CUDA_VISIBLE_DEVICES', shell=True).decode('utf'))
 
 
 def evaluate_accuracy(eval_set, model):
@@ -46,13 +47,13 @@ def main():
     parser.add_argument('--save_model', dest='save_model', action='store_true')
     parser.add_argument('--load_model_path', default=None)
 
-
     # data
     parser.add_argument('--num_relation', default=38, type=int, help='number of relations')
     parser.add_argument('--train_adj', default=f'data/{args.dataset}/graph/train.graph.adj.pk')
     parser.add_argument('--dev_adj', default=f'data/{args.dataset}/graph/dev.graph.adj.pk')
     parser.add_argument('--test_adj', default=f'data/{args.dataset}/graph/test.graph.adj.pk')
-    parser.add_argument('--use_cache', default=True, type=bool_flag, nargs='?', const=True, help='use cached data to accelerate data loading')
+    parser.add_argument('--use_cache', default=True, type=bool_flag, nargs='?', const=True,
+                        help='use cached data to accelerate data loading')
 
     # model architecture
     parser.add_argument('-k', '--k', default=5, type=int, help='perform k-layer message passing')
@@ -60,13 +61,14 @@ def main():
     parser.add_argument('--gnn_dim', default=100, type=int, help='dimension of the GNN layers')
     parser.add_argument('--fc_dim', default=200, type=int, help='number of FC hidden units')
     parser.add_argument('--fc_layer_num', default=0, type=int, help='number of FC layers')
-    parser.add_argument('--freeze_ent_emb', default=True, type=bool_flag, nargs='?', const=True, help='freeze entity embedding layer')
+    parser.add_argument('--freeze_ent_emb', default=True, type=bool_flag, nargs='?', const=True,
+                        help='freeze entity embedding layer')
 
     parser.add_argument('--max_node_num', default=200, type=int)
     parser.add_argument('--simple', default=False, type=bool_flag, nargs='?', const=True)
     parser.add_argument('--subsample', default=1.0, type=float)
-    parser.add_argument('--init_range', default=0.02, type=float, help='stddev when initializing with normal distribution')
-
+    parser.add_argument('--init_range', default=0.02, type=float,
+                        help='stddev when initializing with normal distribution')
 
     # regularization
     parser.add_argument('--dropouti', type=float, default=0.2, help='dropout for embedding layer')
@@ -74,7 +76,8 @@ def main():
     parser.add_argument('--dropoutf', type=float, default=0.2, help='dropout for fully-connected layers')
 
     # optimization
-    parser.add_argument('-dlr', '--decoder_lr', default=DECODER_DEFAULT_LR[args.dataset], type=float, help='learning rate')
+    parser.add_argument('-dlr', '--decoder_lr', default=DECODER_DEFAULT_LR[args.dataset], type=float,
+                        help='learning rate')
     parser.add_argument('-mbs', '--mini_batch_size', default=1, type=int)
     parser.add_argument('-ebs', '--eval_batch_size', default=2, type=int)
     parser.add_argument('--unfreeze_epoch', default=4, type=int)
@@ -83,7 +86,8 @@ def main():
     parser.add_argument('--drop_partial_batch', default=False, type=bool_flag, help='')
     parser.add_argument('--fill_partial_batch', default=False, type=bool_flag, help='')
 
-    parser.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS, help='show this help message and exit')
+    parser.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS,
+                        help='show this help message and exit')
     args = parser.parse_args()
     if args.simple:
         parser.set_defaults(k=1)
@@ -97,8 +101,6 @@ def main():
         eval_detail(args)
     else:
         raise ValueError('Invalid mode')
-
-
 
 
 def train(args):
@@ -127,7 +129,6 @@ def train(args):
     concept_num, concept_dim = cp_emb.size(0), cp_emb.size(1)
     print('| num_concepts: {} |'.format(concept_num))
 
-
     if True:
         if torch.cuda.device_count() >= 2 and args.cuda:
             device0 = torch.device("cuda:0")
@@ -139,43 +140,46 @@ def train(args):
             device0 = torch.device("cpu")
             device1 = torch.device("cpu")
         dataset = DataLoader(args, args.train_statements, args.train_adj,
-                                               args.dev_statements, args.dev_adj,
-                                               args.test_statements, args.test_adj,
-                                               batch_size=args.batch_size, eval_batch_size=args.eval_batch_size,
-                                               device=(device0, device1),
-                                               model_name=args.encoder,
-                                               max_node_num=args.max_node_num, max_seq_length=args.max_seq_len,
-                                               is_inhouse=args.inhouse, inhouse_train_qids_path=args.inhouse_train_qids,
-                                               subsample=args.subsample, use_cache=args.use_cache)
+                             args.dev_statements, args.dev_adj,
+                             args.test_statements, args.test_adj,
+                             batch_size=args.batch_size, eval_batch_size=args.eval_batch_size,
+                             device=(device0, device1),
+                             model_name=args.encoder,
+                             max_node_num=args.max_node_num, max_seq_length=args.max_seq_len,
+                             is_inhouse=args.inhouse, inhouse_train_qids_path=args.inhouse_train_qids,
+                             subsample=args.subsample, use_cache=args.use_cache)
 
         ###################################################################################################
         #   Build model                                                                                   #
         ###################################################################################################
-        print ('args.num_relation', args.num_relation)
+        print('args.num_relation', args.num_relation)
         model = JOINT_LM_KG(args, args.encoder, k=args.k, n_ntype=4, n_etype=args.num_relation, n_concept=concept_num,
-                                   concept_dim=args.gnn_dim,
-                                   concept_in_dim=concept_dim,
-                                   n_attention_head=args.att_head_num, fc_dim=args.fc_dim, n_fc_layer=args.fc_layer_num,
-                                   p_emb=args.dropouti, p_gnn=args.dropoutg, p_fc=args.dropoutf,
-                                   pretrained_concept_emb=cp_emb, freeze_ent_emb=args.freeze_ent_emb,
-                                   init_range=args.init_range,
-                                   encoder_config={})
+                            concept_dim=args.gnn_dim,
+                            concept_in_dim=concept_dim,
+                            n_attention_head=args.att_head_num, fc_dim=args.fc_dim, n_fc_layer=args.fc_layer_num,
+                            p_emb=args.dropouti, p_gnn=args.dropoutg, p_fc=args.dropoutf,
+                            pretrained_concept_emb=cp_emb, freeze_ent_emb=args.freeze_ent_emb,
+                            init_range=args.init_range,
+                            encoder_config={})
         if args.load_model_path:
-            print (f'loading and initializing model from {args.load_model_path}')
+            print(f'loading and initializing model from {args.load_model_path}')
             model_state_dict, old_args = torch.load(args.load_model_path, map_location=torch.device('cpu'))
             model.load_state_dict(model_state_dict)
 
         model.encoder.to(device0)
         model.decoder.to(device1)
 
-
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
 
     grouped_parameters = [
-        {'params': [p for n, p in model.encoder.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': args.weight_decay, 'lr': args.encoder_lr},
-        {'params': [p for n, p in model.encoder.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0, 'lr': args.encoder_lr},
-        {'params': [p for n, p in model.decoder.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': args.weight_decay, 'lr': args.decoder_lr},
-        {'params': [p for n, p in model.decoder.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0, 'lr': args.decoder_lr},
+        {'params': [p for n, p in model.encoder.named_parameters() if not any(nd in n for nd in no_decay)],
+         'weight_decay': args.weight_decay, 'lr': args.encoder_lr},
+        {'params': [p for n, p in model.encoder.named_parameters() if any(nd in n for nd in no_decay)],
+         'weight_decay': 0.0, 'lr': args.encoder_lr},
+        {'params': [p for n, p in model.decoder.named_parameters() if not any(nd in n for nd in no_decay)],
+         'weight_decay': args.weight_decay, 'lr': args.decoder_lr},
+        {'params': [p for n, p in model.decoder.named_parameters() if any(nd in n for nd in no_decay)],
+         'weight_decay': 0.0, 'lr': args.decoder_lr},
     ]
     optimizer = OPTIMIZER_CLASSES[args.optim](grouped_parameters)
 
@@ -194,7 +198,8 @@ def train(args):
         try:
             scheduler = WarmupLinearSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=max_steps)
         except:
-            scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=max_steps)
+            scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps,
+                                                        num_training_steps=max_steps)
 
     print('Encoder parameters:')
     for name, param in model.encoder.named_parameters():
@@ -204,7 +209,6 @@ def train(args):
             print('\t{:45}\tfixed\t{}\tdevice:{}'.format(name, param.size(), param.device))
     num_params = sum(p.numel() for p in model.encoder.parameters() if p.requires_grad)
     print('\tEncoder total:', num_params)
-
 
     print('parameters:')
     for name, param in model.decoder.named_parameters():
@@ -225,7 +229,9 @@ def train(args):
             num_choice = logits.size(1)
             flat_logits = logits.view(-1)
             correct_mask = F.one_hot(labels, num_classes=num_choice).view(-1)  # of length batch_size*num_choice
-            correct_logits = flat_logits[correct_mask == 1].contiguous().view(-1, 1).expand(-1, num_choice - 1).contiguous().view(-1)  # of length batch_size*(num_choice-1)
+            correct_logits = flat_logits[correct_mask == 1].contiguous().view(-1, 1).expand(-1,
+                                                                                            num_choice - 1).contiguous().view(
+                -1)  # of length batch_size*(num_choice-1)
             wrong_logits = flat_logits[correct_mask == 0]
             y = wrong_logits.new_ones((wrong_logits.size(0),))
             loss = loss_func(correct_logits, wrong_logits, y)  # margin ranking loss
@@ -240,7 +246,7 @@ def train(args):
     print()
     print('-' * 71)
     if args.fp16:
-        print ('Using fp16 training')
+        print('Using fp16 training')
         scaler = torch.cuda.amp.GradScaler()
 
     global_step, best_dev_epoch = 0, 0
@@ -249,7 +255,7 @@ def train(args):
     model.train()
     freeze_net(model.encoder)
     if True:
-    # try:
+        # try:
         for epoch_id in range(args.n_epochs):
             if epoch_id == args.unfreeze_epoch:
                 unfreeze_net(model.encoder)
@@ -299,7 +305,10 @@ def train(args):
                 if (global_step + 1) % args.log_interval == 0:
                     total_loss /= args.log_interval
                     ms_per_batch = 1000 * (time.time() - start_time) / args.log_interval
-                    print('| step {:5} |  lr: {:9.7f} | loss {:7.4f} | ms/batch {:7.2f} |'.format(global_step, scheduler.get_lr()[0], total_loss, ms_per_batch))
+                    print('| step {:5} |  lr: {:9.7f} | loss {:7.4f} | ms/batch {:7.2f} |'.format(global_step,
+                                                                                                  scheduler.get_lr()[0],
+                                                                                                  total_loss,
+                                                                                                  ms_per_batch))
                     total_loss = 0
                     start_time = time.time()
                 global_step += 1
@@ -318,18 +327,23 @@ def train(args):
                     with torch.no_grad():
                         for qids, labels, *input_data in tqdm(eval_set):
                             count += 1
-                            logits, _, concept_ids, node_type_ids, edge_index, edge_type = model(*input_data, detail=True)
-                            predictions = logits.argmax(1) #[bsize, ]
-                            preds_ranked = (-logits).argsort(1) #[bsize, n_choices]
-                            for i, (qid, label, pred, _preds_ranked, cids, ntype, edges, etype) in enumerate(zip(qids, labels, predictions, preds_ranked, concept_ids, node_type_ids, edge_index, edge_type)):
-                                acc = int(pred.item()==label.item())
-                                print ('{},{}'.format(qid, chr(ord('A') + pred.item())), file=f_preds)
+                            logits, _, concept_ids, node_type_ids, edge_index, edge_type = model(*input_data,
+                                                                                                 detail=True)
+                            predictions = logits.argmax(1)  # [bsize, ]
+                            preds_ranked = (-logits).argsort(1)  # [bsize, n_choices]
+                            for i, (qid, label, pred, _preds_ranked, cids, ntype, edges, etype) in enumerate(
+                                    zip(qids, labels, predictions, preds_ranked, concept_ids, node_type_ids, edge_index,
+                                        edge_type)):
+                                acc = int(pred.item() == label.item())
+                                print('{},{}'.format(qid, chr(ord('A') + pred.item())), file=f_preds)
                                 f_preds.flush()
                                 total_acc.append(acc)
-                test_acc = float(sum(total_acc))/len(total_acc)
+                test_acc = float(sum(total_acc)) / len(total_acc)
 
             print('-' * 71)
-            print('| epoch {:3} | step {:5} | dev_acc {:7.4f} | test_acc {:7.4f} |'.format(epoch_id, global_step, dev_acc, test_acc))
+            print(
+                '| epoch {:3} | step {:5} | dev_acc {:7.4f} | test_acc {:7.4f} |'.format(epoch_id, global_step, dev_acc,
+                                                                                         test_acc))
             print('-' * 71)
             with open(log_path, 'a') as fout:
                 fout.write('{},{},{}\n'.format(global_step, dev_acc, test_acc))
@@ -350,8 +364,6 @@ def train(args):
                 break
 
 
-
-
 def eval_detail(args):
     assert args.load_model_path is not None
     model_path = args.load_model_path
@@ -362,14 +374,16 @@ def eval_detail(args):
     print('| num_concepts: {} |'.format(concept_num))
 
     model_state_dict, old_args = torch.load(model_path, map_location=torch.device('cpu'))
-    model = JOINT_LM_KG(old_args, old_args.encoder, k=old_args.k, n_ntype=4, n_etype=old_args.num_relation, n_concept=concept_num,
-                               concept_dim=old_args.gnn_dim,
-                               concept_in_dim=concept_dim,
-                               n_attention_head=old_args.att_head_num, fc_dim=old_args.fc_dim, n_fc_layer=old_args.fc_layer_num,
-                               p_emb=old_args.dropouti, p_gnn=old_args.dropoutg, p_fc=old_args.dropoutf,
-                               pretrained_concept_emb=cp_emb, freeze_ent_emb=old_args.freeze_ent_emb,
-                               init_range=old_args.init_range,
-                               encoder_config={})
+    model = JOINT_LM_KG(old_args, old_args.encoder, k=old_args.k, n_ntype=4, n_etype=old_args.num_relation,
+                        n_concept=concept_num,
+                        concept_dim=old_args.gnn_dim,
+                        concept_in_dim=concept_dim,
+                        n_attention_head=old_args.att_head_num, fc_dim=old_args.fc_dim,
+                        n_fc_layer=old_args.fc_layer_num,
+                        p_emb=old_args.dropouti, p_gnn=old_args.dropoutg, p_fc=old_args.dropoutf,
+                        pretrained_concept_emb=cp_emb, freeze_ent_emb=old_args.freeze_ent_emb,
+                        init_range=old_args.init_range,
+                        encoder_config={})
     model.load_state_dict(model_state_dict)
 
     if torch.cuda.device_count() >= 2 and args.cuda:
@@ -391,24 +405,24 @@ def eval_detail(args):
 
     use_contextualized = 'lm' in old_args.ent_emb
 
-    print ('inhouse?', args.inhouse)
+    print('inhouse?', args.inhouse)
 
-    print ('args.train_statements', args.train_statements)
-    print ('args.dev_statements', args.dev_statements)
-    print ('args.test_statements', args.test_statements)
-    print ('args.train_adj', args.train_adj)
-    print ('args.dev_adj', args.dev_adj)
-    print ('args.test_adj', args.test_adj)
+    print('args.train_statements', args.train_statements)
+    print('args.dev_statements', args.dev_statements)
+    print('args.test_statements', args.test_statements)
+    print('args.train_adj', args.train_adj)
+    print('args.dev_adj', args.dev_adj)
+    print('args.test_adj', args.test_adj)
 
     dataset = DataLoader(args, args.train_statements, args.train_adj,
-                                           args.dev_statements, args.dev_adj,
-                                           args.test_statements, args.test_adj,
-                                           batch_size=args.batch_size, eval_batch_size=args.eval_batch_size,
-                                           device=(device0, device1),
-                                           model_name=old_args.encoder,
-                                           max_node_num=old_args.max_node_num, max_seq_length=old_args.max_seq_len,
-                                           is_inhouse=args.inhouse, inhouse_train_qids_path=args.inhouse_train_qids,
-                                           subsample=args.subsample, use_cache=args.use_cache)
+                         args.dev_statements, args.dev_adj,
+                         args.test_statements, args.test_adj,
+                         batch_size=args.batch_size, eval_batch_size=args.eval_batch_size,
+                         device=(device0, device1),
+                         model_name=old_args.encoder,
+                         max_node_num=old_args.max_node_num, max_seq_length=old_args.max_seq_len,
+                         is_inhouse=args.inhouse, inhouse_train_qids_path=args.inhouse_train_qids,
+                         subsample=args.subsample, use_cache=args.use_cache)
 
     save_test_preds = args.save_model
     dev_acc = evaluate_accuracy(dataset.dev(), model)
@@ -426,19 +440,20 @@ def eval_detail(args):
                 for qids, labels, *input_data in tqdm(eval_set):
                     count += 1
                     logits, _, concept_ids, node_type_ids, edge_index, edge_type = model(*input_data, detail=True)
-                    predictions = logits.argmax(1) #[bsize, ]
-                    preds_ranked = (-logits).argsort(1) #[bsize, n_choices]
-                    for i, (qid, label, pred, _preds_ranked, cids, ntype, edges, etype) in enumerate(zip(qids, labels, predictions, preds_ranked, concept_ids, node_type_ids, edge_index, edge_type)):
-                        acc = int(pred.item()==label.item())
-                        print ('{},{}'.format(qid, chr(ord('A') + pred.item())), file=f_preds)
+                    predictions = logits.argmax(1)  # [bsize, ]
+                    preds_ranked = (-logits).argsort(1)  # [bsize, n_choices]
+                    for i, (qid, label, pred, _preds_ranked, cids, ntype, edges, etype) in enumerate(
+                            zip(qids, labels, predictions, preds_ranked, concept_ids, node_type_ids, edge_index,
+                                edge_type)):
+                        acc = int(pred.item() == label.item())
+                        print('{},{}'.format(qid, chr(ord('A') + pred.item())), file=f_preds)
                         f_preds.flush()
                         total_acc.append(acc)
-        test_acc = float(sum(total_acc))/len(total_acc)
+        test_acc = float(sum(total_acc)) / len(total_acc)
 
         print('-' * 71)
         print('test_acc {:7.4f}'.format(test_acc))
         print('-' * 71)
-
 
 
 if __name__ == '__main__':
