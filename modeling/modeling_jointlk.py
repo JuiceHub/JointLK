@@ -511,7 +511,8 @@ class GATConvE(MessagePassing):
         n_etype (int): number of edge relation types (e.g. 38)
     """
 
-    def __init__(self, args, emb_dim, n_ntype, n_etype, edge_encoder, head_count=4, aggr="add"):
+    def __init__(self, args, emb_dim, n_ntype, n_etype, edge_encoder, head_count=4, aggr="add",
+                 negative_slope: float = 0.2, dropout: float = 0.):
         super(GATConvE, self).__init__(aggr=aggr)
         self.args = args
 
@@ -529,6 +530,9 @@ class GATConvE(MessagePassing):
         self.linear_key = nn.Linear(2 * emb_dim, head_count * self.dim_per_head)
         self.linear_msg = nn.Linear(2 * emb_dim, head_count * self.dim_per_head)
         self.linear_query = nn.Linear(1 * emb_dim, head_count * self.dim_per_head)
+        # self.linear_key = nn.Linear(int(2.5 * emb_dim), head_count * self.dim_per_head)
+        # self.linear_msg = nn.Linear(int(2.5 * emb_dim), head_count * self.dim_per_head)
+        # self.linear_query = nn.Linear(int(1.5 * emb_dim), head_count * self.dim_per_head)
 
         self._alpha = None
 
@@ -536,13 +540,27 @@ class GATConvE(MessagePassing):
         self.mlp = torch.nn.Sequential(torch.nn.Linear(emb_dim, emb_dim), torch.nn.BatchNorm1d(emb_dim),
                                        torch.nn.ReLU(), torch.nn.Linear(emb_dim, emb_dim))
 
+        # self.linear_k = nn.Linear(int(1.5 * emb_dim), head_count * self.dim_per_head)
+        # self.linear_q = nn.Linear(int(2.5 * emb_dim), head_count * self.dim_per_head)
+        # self.linear_msg = nn.Linear(int(2.5 * emb_dim), head_count * self.dim_per_head)
+
+        self.negative_slope = negative_slope
+        self.att = nn.Parameter(torch.Tensor(1, head_count, self.dim_per_head))
+        self.dropout = dropout
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        glorot(self.linear_key.weight)
+        glorot(self.linear_query.weight)
+        glorot(self.linear_msg.weight)
+        glorot(self.att)
+
     def forward(self, x, edge_index, edge_type, node_type, node_feature_extra, return_attention_weights=False):
         # x: [N, emb_dim]
         # edge_index: [2, E]
         # edge_type [E,] -> edge_attr: [E, 39] / self_edge_attr: [N, 39]
         # node_type [N,] -> headtail_attr [E, 8(=4+4)] / self_headtail_attr: [N, 8]
         # node_feature_extra [N, dim]
-
         # Prepare edge feature
         edge_vec = make_one_hot(edge_type, self.n_etype + 1)  # [E, 39]
         self_edge_vec = torch.zeros(x.size(0), self.n_etype + 1).to(edge_vec.device)
@@ -561,7 +579,7 @@ class GATConvE(MessagePassing):
         edge_embeddings = self.edge_encoder(torch.cat([edge_vec, headtail_vec], dim=1))  # [E+N, emb_dim]
 
         # remove self loops
-        edge_index, _ = remove_self_loops(edge_index)
+        # edge_index, _ = remove_self_loops(edge_index)
         # Add self loops to edge_index
         loop_index = torch.arange(0, x.size(0), dtype=torch.long, device=edge_index.device)
         loop_index = loop_index.unsqueeze(0).repeat(2, 1)
@@ -581,12 +599,12 @@ class GATConvE(MessagePassing):
         else:
             return out
 
-    def message(self, edge_index, x_i, x_j, edge_attr):  # i: tgt, j:src
+    def message(self, edge_index, x_i, x_j, edge_attr, index, ptr, size_i):  # i: tgt, j:src
 
-        assert len(edge_attr.size()) == 2
-        assert edge_attr.size(1) == self.emb_dim
-        assert x_i.size(1) == x_j.size(1) == 1 * self.emb_dim
-        assert x_i.size(0) == x_j.size(0) == edge_attr.size(0) == edge_index.size(1)
+        # assert len(edge_attr.size()) == 2
+        # assert edge_attr.size(1) == self.emb_dim
+        # assert x_i.size(1) == x_j.size(1) == 1 * self.emb_dim
+        # assert x_i.size(0) == x_j.size(0) == edge_attr.size(0) == edge_index.size(1)
 
         key = self.linear_key(torch.cat([x_i, edge_attr], dim=1)).view(-1, self.head_count,
                                                                        self.dim_per_head)  # [E, heads, _dim]
@@ -594,11 +612,14 @@ class GATConvE(MessagePassing):
                                                                        self.dim_per_head)  # [E, heads, _dim]
         query = self.linear_query(x_j).view(-1, self.head_count, self.dim_per_head)  # [E, heads, _dim]
 
-        query = query / math.sqrt(self.dim_per_head)
-        scores = (query * key).sum(dim=2)  # [E, heads]
+        x = key + query
         src_node_index = edge_index[0]  # [E,]
-        alpha = softmax(scores, src_node_index)  # [E, heads] #group by src side node
+        x = F.leaky_relu(x, self.negative_slope)
+        alpha = (x * self.att).sum(dim=-1)
+        # alpha = softmax(alpha, src_node_index)
+        alpha = softmax(alpha, index, ptr, size_i)
         self._alpha = alpha
+        alpha = F.dropout(alpha, p=self.dropout, training=self.training)
 
         # adjust by outgoing degree of src
         E = edge_index.size(1)  # n_edges
