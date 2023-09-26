@@ -77,15 +77,17 @@ class QAGNN_Message_Passing(nn.Module):
             X = _X.view(_batch_size, -1, self.hidden_size)  # [batch_size, n_node, dim]
             X_copy = X.clone()
             ### X1:  torch.Size([5, 200, 200])
-            X, lm_node_scores = self.SKatts(X, last_hidden_states, gnn_mask, lm_mask, return_att=True)
+            X = self.SKatts(X, last_hidden_states, gnn_mask, lm_mask, return_att=False)
             _X = self.attention_prj(X)
             _X = _X.view(-1, self.hidden_size)
 
             ### KG to LM
-            last_hidden_states = self.KSatts(last_hidden_states, X_copy, lm_mask, gnn_mask, return_att=False)
+            last_hidden_states, lm_node_scores = self.KSatts(last_hidden_states, X_copy, lm_mask, gnn_mask,
+                                                             return_att=True)
             last_hidden_states = self.hidden_states_prj(last_hidden_states)
 
             ### 剪枝
+            lm_node_scores = lm_node_scores.transpose(1, 2)
             lm_node_scores = torch.sum(lm_node_scores, -1).view(-1)  # torch.Size([5, 200, 1])
             gnn_mask = gnn_mask.view(-1)
 

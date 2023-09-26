@@ -619,27 +619,54 @@ class CQAttention(torch.nn.Module):
     def __init__(self, block_hidden_dim):
         super().__init__()
         # self.dropout = dropout
-        w4C = torch.empty(block_hidden_dim, 1)
-        w4Q = torch.empty(block_hidden_dim, 1)
-        w4mlu = torch.empty(1, 1, block_hidden_dim)
-        torch.nn.init.xavier_uniform_(w4C)
-        torch.nn.init.xavier_uniform_(w4Q)
-        torch.nn.init.xavier_uniform_(w4mlu)
-        self.w4C = torch.nn.Parameter(w4C)
-        self.w4Q = torch.nn.Parameter(w4Q)
-        self.w4mlu = torch.nn.Parameter(w4mlu)
+        # w4C = torch.empty(block_hidden_dim, 1)
+        # w4Q = torch.empty(block_hidden_dim, 1)
+        # w4mlu = torch.empty(1, 1, block_hidden_dim)
+        # torch.nn.init.xavier_uniform_(w4C)
+        # torch.nn.init.xavier_uniform_(w4Q)
+        # torch.nn.init.xavier_uniform_(w4mlu)
+        # self.w4C = torch.nn.Parameter(w4C)
+        # self.w4Q = torch.nn.Parameter(w4Q)
+        # self.w4mlu = torch.nn.Parameter(w4mlu)
+        #
+        # bias = torch.empty(1)
+        # torch.nn.init.constant_(bias, 0)
+        # self.bias = torch.nn.Parameter(bias)
 
-        bias = torch.empty(1)
-        torch.nn.init.constant_(bias, 0)
-        self.bias = torch.nn.Parameter(bias)
+        self.linear_query = nn.Linear(block_hidden_dim, block_hidden_dim)
+        self.linear_key = nn.Linear(block_hidden_dim, block_hidden_dim)
+        self.linear_value = nn.Linear(block_hidden_dim, block_hidden_dim)
+
+        self.linear_c = nn.Linear(block_hidden_dim, 1, bias=False)
+        self.linear_q = nn.Linear(block_hidden_dim, 1, bias=False)
+
+        self.activation = nn.GELU()
 
     def forward(self, C, Q, Cmask, Qmask, return_att=False):
         ### C, Q, Cmask, Qmask:  
         ### torch.Size([5, 200, 200]) torch.Size([5, 100, 200]) 
         ### torch.Size([5, 200]) torch.Size([5, 100])
 
-        S = self.trilinear_for_attention(C, Q)
+        max_q_len = Q.size(-2)
+        max_context_len = C.size(-2)
+
+        subres0 = self.linear_c(C).expand([-1, -1, max_q_len])
+        subres1 = self.linear_q(Q).transpose(1, 2).expand([-1, max_context_len, -1])
+
+        query = self.linear_query(C)
+        key = self.linear_key(Q)
+        value = self.linear_value(Q)
+
+        subres2 = torch.matmul(query, key.transpose(1, 2))
+
+        # # 归一化
+        subres2 = subres2 / (max_q_len ** 0.5)
+
+        S = self.activation(subres0) + self.activation(subres1) + subres2
         ### torch.Size([5, 200, 100])
+
+        # 归一化
+        S = S / (max_q_len ** 0.5)
 
         Cmask = Cmask.unsqueeze(-1)
         Qmask = Qmask.unsqueeze(1)
@@ -648,7 +675,7 @@ class CQAttention(torch.nn.Module):
         ### S1: torch.Size([5, 200, 100])，100那维被mask了
         ### S2:  torch.Size([5, 200, 100])，200那维被mask了
 
-        A = torch.bmm(S1, Q)
+        A = torch.bmm(S1, value)
         ### A:  torch.Size([5, 200, 200])
 
         B = torch.bmm(torch.bmm(S1, S2.transpose(1, 2)), C)
@@ -657,26 +684,10 @@ class CQAttention(torch.nn.Module):
         out = torch.cat([C, A, torch.mul(C, A), torch.mul(C, B)], dim=2)
 
         if return_att:
-            return out, S2
+            return out, S1
 
         ### out:  torch.Size([5, 200, 800])
         return out
-
-    def trilinear_for_attention(self, C, Q):
-
-        max_q_len = Q.size(-2)
-
-        max_context_len = C.size(-2)
-
-        subres0 = torch.matmul(C, self.w4C).expand([-1, -1, max_q_len])
-
-        subres1 = torch.matmul(Q, self.w4Q).transpose(1, 2).expand([-1, max_context_len, -1])
-
-        subres2 = torch.matmul(C * self.w4mlu, Q.transpose(1, 2))
-
-        res = subres0 + subres1 + subres2
-        res += self.bias
-        return res
 
     def masked_softmax(self, x, m=None, dim=-1):
         '''
