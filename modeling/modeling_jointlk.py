@@ -58,12 +58,16 @@ class QAGNN_Message_Passing(nn.Module):
         self.KSatts = CQAttention(block_hidden_dim=hidden_size)
         self.hidden_states_prj = torch.nn.Linear(hidden_size * 4, hidden_size, bias=False)
 
+        self.svec2nvec = nn.Linear(1024, hidden_size)
+        self.nvec2svec = nn.Linear(1024 + hidden_size, 1024)
+
     def mp_helper(self, _X, edge_index, edge_type, _node_type, _node_feature_extra,
                   batch=None, gnn_mask=None,
                   last_hidden_states=None, lm_mask=None):
         _batch_size, _n_nodes = gnn_mask.size()
 
         for i in range(self.k):
+            last_hidden_states_node = self.activation(self.svec2nvec(last_hidden_states))
             _X, new_edge_index_alpha = self.gnn_layers[i](_X, edge_index, edge_type,
                                                           _node_type, _node_feature_extra,
                                                           return_attention_weights=True)
@@ -77,13 +81,17 @@ class QAGNN_Message_Passing(nn.Module):
             X = _X.view(_batch_size, -1, self.hidden_size)  # [batch_size, n_node, dim]
             X_copy = X.clone()
             ### X1:  torch.Size([5, 200, 200])
-            X, lm_node_scores = self.SKatts(X, last_hidden_states, gnn_mask, lm_mask, return_att=True)
+            X, lm_node_scores = self.SKatts(X, last_hidden_states_node, gnn_mask, lm_mask, return_att=True)
             _X = self.attention_prj(X)
             _X = _X.view(-1, self.hidden_size)
 
             ### KG to LM
-            last_hidden_states = self.KSatts(last_hidden_states, X_copy, lm_mask, gnn_mask, return_att=False)
-            last_hidden_states = self.hidden_states_prj(last_hidden_states)
+            last_hidden_states_node = self.KSatts(last_hidden_states_node, X_copy, lm_mask, gnn_mask, return_att=False)
+            last_hidden_states_node = self.hidden_states_prj(last_hidden_states_node)
+
+            last_hidden_states = torch.cat([last_hidden_states_node, last_hidden_states], dim=2)
+
+            last_hidden_states = self.activation(self.nvec2svec(last_hidden_states))
 
             ### 剪枝
             lm_node_scores = torch.sum(lm_node_scores, -1).view(-1)  # torch.Size([5, 200, 1])
@@ -242,7 +250,7 @@ class JOINTLK(nn.Module):
         # [ True,  True,  True,  True,  True,  True,  True,  True,  True,  True,
         #  True,  True,  True,  True,  True True是真节点
         ### [5,150,200]hidden_transform-->svec2nvec
-        last_hidden_states = self.activation(self.svec2nvec(last_hidden_states))
+        # last_hidden_states = self.activation(self.svec2nvec(last_hidden_states))
 
         gnn_output, new_mask, batch = self.gnn(gnn_input, adj, node_type_ids, node_scores,
                                                batch=batch, gnn_mask=gnn_mask.to(node_type_ids.device),
