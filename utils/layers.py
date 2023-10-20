@@ -641,6 +641,7 @@ class CQAttention(torch.nn.Module):
         self.linear_q = nn.Linear(block_hidden_dim, 1, bias=False)
 
         self.activation = nn.GELU()
+        # self.layer_norm = nn.LayerNorm()
 
     def forward(self, C, Q, Cmask, Qmask, return_att=False):
         ### C, Q, Cmask, Qmask:  
@@ -666,7 +667,7 @@ class CQAttention(torch.nn.Module):
         ### torch.Size([5, 200, 100])
 
         # 归一化
-        S = S / (max_q_len ** 0.5)
+        # S = S / (max_q_len ** 0.5)
 
         Cmask = Cmask.unsqueeze(-1)
         Qmask = Qmask.unsqueeze(1)
