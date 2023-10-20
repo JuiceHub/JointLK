@@ -59,7 +59,7 @@ class QAGNN_Message_Passing(nn.Module):
         self.hidden_states_prj = torch.nn.Linear(hidden_size * 4, hidden_size, bias=False)
 
         self.svec2nvec = nn.Linear(1024, hidden_size)
-        self.nvec2svec = nn.Linear(1024 + hidden_size, 1024)
+        self.nvec2svec = nn.Linear(hidden_size, 1024)
 
     def mp_helper(self, _X, edge_index, edge_type, _node_type, _node_feature_extra,
                   batch=None, gnn_mask=None,
@@ -89,9 +89,7 @@ class QAGNN_Message_Passing(nn.Module):
             last_hidden_states_node = self.KSatts(last_hidden_states_node, X_copy, lm_mask, gnn_mask, return_att=False)
             last_hidden_states_node = self.hidden_states_prj(last_hidden_states_node)
 
-            last_hidden_states = torch.cat([last_hidden_states_node, last_hidden_states], dim=2)
-
-            last_hidden_states = self.activation(self.nvec2svec(last_hidden_states))
+            last_hidden_states = last_hidden_states + self.activation(self.nvec2svec(last_hidden_states_node))
 
             ### 剪枝
             lm_node_scores = torch.sum(lm_node_scores, -1).view(-1)  # torch.Size([5, 200, 1])
