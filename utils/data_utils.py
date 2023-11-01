@@ -294,7 +294,7 @@ def get_gpt_token_num():
 def load_bert_xlnet_roberta_input_tensors(statement_jsonl_path, model_type, model_name, max_seq_length):
     class InputExample(object):
 
-        def __init__(self, example_id, question, contexts, endings, surface, triples,
+        def __init__(self, example_id, question, contexts, endings, knowledge,
                      label=None):
             self.example_id = example_id
             self.question = question
@@ -302,8 +302,7 @@ def load_bert_xlnet_roberta_input_tensors(statement_jsonl_path, model_type, mode
             self.endings = endings
             self.label = label
             # add knowledge and triples
-            self.surface = surface
-            self.triples = triples
+            self.knowledge = knowledge
 
     class InputFeatures(object):
 
@@ -337,8 +336,7 @@ def load_bert_xlnet_roberta_input_tensors(statement_jsonl_path, model_type, mode
                         contexts=[contexts] * len(json_dic["question"]["choices"]),
                         question="",
                         endings=[ending["text"] for ending in json_dic["question"]["choices"]],
-                        triples=[ending["triple"] if type(ending.get("triple")) is list else json_dic["fact1"] for
-                                 ending in json_dic["question"]["choices"]],
+                        knowledge=[json_dic["knowledge"] for ending in json_dic["question"]["choices"]],
                         label=label
                     ))
         return examples
@@ -367,7 +365,7 @@ def load_bert_xlnet_roberta_input_tensors(statement_jsonl_path, model_type, mode
         features = []
         for ex_index, example in enumerate(tqdm(examples)):
             choices_features = []
-            for ending_idx, (context, ending, tr) in enumerate(zip(example.contexts, example.endings, example.triples)):
+            for ending_idx, (context, ending, knowledge) in enumerate(zip(example.contexts, example.endings, example.knowledge)):
                 # tokens_a = tokenizer.tokenize(context)
                 # tokens_b = tokenizer.tokenize(example.question + " " + ending)
 
@@ -375,12 +373,9 @@ def load_bert_xlnet_roberta_input_tensors(statement_jsonl_path, model_type, mode
                 tokens_a = tokenizer.tokenize(context)
 
                 tokens_b = ""
-                if tr:
-                    if type(tr) is list:
-                        triple = tr[0]
-                        tokens_b = tokenizer.tokenize(triple[0] + ' ' + triple[1] + ' ' + triple[2])
-                    else:
-                        tokens_b = tokenizer.tokenize(tr)
+
+                if knowledge:
+                    tokens_b = tokenizer.tokenize(knowledge)
 
                 special_tokens_count = 4 if sep_token_extra else 3
                 _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - special_tokens_count)
