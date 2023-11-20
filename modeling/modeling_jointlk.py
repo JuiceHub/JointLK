@@ -98,7 +98,7 @@ class QAGNN_Message_Passing(nn.Module):
 
         gnn_mask = gnn_mask.view(_batch_size, -1)
 
-        return _X, batch, gnn_mask
+        return _X, last_hidden_states, batch, gnn_mask
 
     def forward(self, H, A, node_type, node_score, cache_output=False,
                 batch=None, gnn_mask=None,
@@ -138,11 +138,11 @@ class QAGNN_Message_Passing(nn.Module):
         _node_feature_extra = torch.cat([node_type_emb, node_score_emb], dim=2).view(_node_type.size(0),
                                                                                      -1).contiguous()  # [`total_n_nodes`, dim]
 
-        _X, batch, new_mask = self.mp_helper(_X, edge_index, edge_type, _node_type,
-                                             _node_feature_extra,
-                                             batch=batch, gnn_mask=gnn_mask,
-                                             last_hidden_states=last_hidden_states,
-                                             lm_mask=lm_mask)
+        _X, last_hidden_states, batch, new_mask = self.mp_helper(_X, edge_index, edge_type, _node_type,
+                                                                 _node_feature_extra,
+                                                                 batch=batch, gnn_mask=gnn_mask,
+                                                                 last_hidden_states=last_hidden_states,
+                                                                 lm_mask=lm_mask)
 
         num_nodes = scatter_add(batch.new_ones(_X.size(0)), batch, dim=0)
 
@@ -151,7 +151,7 @@ class QAGNN_Message_Passing(nn.Module):
         output = self.activation(self.Vx(X))
         output = self.dropout(output)
 
-        return output, new_mask, batch
+        return output, last_hidden_states, new_mask, batch
 
 
 class JOINTLK(nn.Module):
@@ -179,7 +179,7 @@ class JOINTLK(nn.Module):
 
         self.pooler = MultiheadAttPoolLayer(n_attention_head, sent_dim, concept_dim)
 
-        self.fc = MLP(concept_dim + sent_dim + concept_dim, fc_dim, 1, n_fc_layer, p_fc, layer_norm=True)
+        self.fc = MLP(concept_dim + sent_dim + concept_dim + concept_dim, fc_dim, 1, n_fc_layer, p_fc, layer_norm=True)
 
         self.dropout_e = nn.Dropout(p_emb)
         self.dropout_fc = nn.Dropout(p_fc)
@@ -244,10 +244,11 @@ class JOINTLK(nn.Module):
         ### [5,150,200]hidden_transform-->svec2nvec
         last_hidden_states = self.activation(self.svec2nvec(last_hidden_states))
 
-        gnn_output, new_mask, batch = self.gnn(gnn_input, adj, node_type_ids, node_scores,
-                                               batch=batch, gnn_mask=gnn_mask.to(node_type_ids.device),
-                                               last_hidden_states=last_hidden_states,
-                                               lm_mask=attention_mask)
+        gnn_output, last_hidden_states, new_mask, batch = self.gnn(gnn_input, adj, node_type_ids, node_scores,
+                                                                   batch=batch,
+                                                                   gnn_mask=gnn_mask.to(node_type_ids.device),
+                                                                   last_hidden_states=last_hidden_states,
+                                                                   lm_mask=attention_mask)
         # gnn_output:[10, 119, 200], new_mask:[10, 119], batch:[1190]
         # new_mask: tensor([[False, False, False, False, False, False, False, False, False, False,
         # False, False, False, False, False, False, False, False, False是假节点
@@ -259,6 +260,7 @@ class JOINTLK(nn.Module):
         Z_vecs = gnn_output[:, 0]  # (batch_size, dim_node)
 
         sent_vecs_for_pooler = sent_vecs
+        sent_vecs_node = last_hidden_states[:, 0, :]
 
         pool_attn = None
         graph_vecs, pool_attn = self.pooler(sent_vecs_for_pooler, gnn_output, mask=pool_mask)
@@ -268,7 +270,7 @@ class JOINTLK(nn.Module):
             self.adj = adj
             self.pool_attn = pool_attn
 
-        concat = self.dropout_fc(torch.cat((graph_vecs, sent_vecs, Z_vecs), 1))
+        concat = self.dropout_fc(torch.cat((graph_vecs, sent_vecs, Z_vecs, sent_vecs_node), 1))
         logits = self.fc(concat)
 
         return logits, pool_attn
