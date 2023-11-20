@@ -131,8 +131,8 @@ def train(args):
 
     if True:
         if torch.cuda.device_count() >= 2 and args.cuda:
-            device0 = torch.device("cuda:1")
-            device1 = torch.device("cuda:1")
+            device0 = torch.device("cuda:2")
+            device1 = torch.device("cuda:2")
         elif torch.cuda.device_count() == 1 and args.cuda:
             device0 = torch.device("cuda:0")
             device1 = torch.device("cuda:0")
@@ -387,8 +387,8 @@ def eval_detail(args):
     model.load_state_dict(model_state_dict)
 
     if torch.cuda.device_count() >= 2 and args.cuda:
-        device0 = torch.device("cuda:1")
-        device1 = torch.device("cuda:1")
+        device0 = torch.device("cuda:2")
+        device1 = torch.device("cuda:2")
     elif torch.cuda.device_count() == 1 and args.cuda:
         device0 = torch.device("cuda:0")
         device1 = torch.device("cuda:0")

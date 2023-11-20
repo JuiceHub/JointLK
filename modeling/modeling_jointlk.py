@@ -527,9 +527,9 @@ class GATConvE(MessagePassing):
         self.head_count = head_count
         assert emb_dim % head_count == 0
         self.dim_per_head = emb_dim // head_count
-        self.linear_key = nn.Linear(2 * emb_dim, head_count * self.dim_per_head)
+        self.linear_key = nn.Linear(1 * emb_dim, head_count * self.dim_per_head)
         self.linear_msg = nn.Linear(2 * emb_dim, head_count * self.dim_per_head)
-        self.linear_query = nn.Linear(1 * emb_dim, head_count * self.dim_per_head)
+        self.linear_query = nn.Linear(2 * emb_dim, head_count * self.dim_per_head)
         # self.linear_key = nn.Linear(int(2.5 * emb_dim), head_count * self.dim_per_head)
         # self.linear_msg = nn.Linear(int(2.5 * emb_dim), head_count * self.dim_per_head)
         # self.linear_query = nn.Linear(int(1.5 * emb_dim), head_count * self.dim_per_head)
@@ -539,10 +539,6 @@ class GATConvE(MessagePassing):
         # For final MLP
         self.mlp = torch.nn.Sequential(torch.nn.Linear(emb_dim, emb_dim), torch.nn.BatchNorm1d(emb_dim),
                                        torch.nn.ReLU(), torch.nn.Linear(emb_dim, emb_dim))
-
-        # self.linear_k = nn.Linear(int(1.5 * emb_dim), head_count * self.dim_per_head)
-        # self.linear_q = nn.Linear(int(2.5 * emb_dim), head_count * self.dim_per_head)
-        # self.linear_msg = nn.Linear(int(2.5 * emb_dim), head_count * self.dim_per_head)
 
         self.negative_slope = negative_slope
         self.att = nn.Parameter(torch.Tensor(1, head_count, self.dim_per_head))
@@ -606,11 +602,12 @@ class GATConvE(MessagePassing):
         # assert x_i.size(1) == x_j.size(1) == 1 * self.emb_dim
         # assert x_i.size(0) == x_j.size(0) == edge_attr.size(0) == edge_index.size(1)
 
-        key = self.linear_key(torch.cat([x_i, edge_attr], dim=1)).view(-1, self.head_count,
+        key = self.linear_key(torch.cat([x_i], dim=1)).view(-1, self.head_count,
                                                                        self.dim_per_head)  # [E, heads, _dim]
         msg = self.linear_msg(torch.cat([x_j, edge_attr], dim=1)).view(-1, self.head_count,
                                                                        self.dim_per_head)  # [E, heads, _dim]
-        query = self.linear_query(x_j).view(-1, self.head_count, self.dim_per_head)  # [E, heads, _dim]
+        query = self.linear_query(torch.cat([x_j, edge_attr], dim=1)).view(-1, self.head_count,
+                                                                           self.dim_per_head)  # [E, heads, _dim]
 
         x = key + query
         src_node_index = edge_index[0]  # [E,]
