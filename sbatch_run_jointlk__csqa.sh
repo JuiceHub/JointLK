@@ -1,4 +1,4 @@
-#!/bin/env bash
+#!/bin/bash
 #SBATCH -J csqa_jointlk_train         
 #SBATCH -o log.csqa_jointlk_train.txt        # 屏幕上的输出文件重定向到 test.out
 #SBATCH -e slurm-%j.err                      # 屏幕上的错误输出文件重定向到 slurm-%j.err , %j 会替换成jobid
