@@ -18,6 +18,7 @@ MODEL_CLASS_TO_NAME = {
     'bert': list(BERT_PRETRAINED_CONFIG_ARCHIVE_MAP.keys()),
     'xlnet': list(XLNET_PRETRAINED_CONFIG_ARCHIVE_MAP.keys()),
     'roberta': list(ROBERTA_PRETRAINED_CONFIG_ARCHIVE_MAP.keys()),
+    'deberta': 'deberta-v3-large',
     'lstm': ['lstm'],
 }
 try:
@@ -96,7 +97,7 @@ class TextEncoder(nn.Module):
         super().__init__()
         self.model_type = MODEL_NAME_TO_CLASS[model_name]
         self.output_token_states = output_token_states
-        assert not self.output_token_states or self.model_type in ('bert', 'roberta', 'albert')
+        assert not self.output_token_states or self.model_type in ('bert', 'roberta', 'albert', 'deberta')
 
         if self.model_type in ('lstm',):
             self.module = LSTMTextEncoder(**kwargs, output_hidden_states=True)
