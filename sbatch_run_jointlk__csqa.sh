@@ -1,4 +1,4 @@
-#!/bin/env bash
+#!/bin/bash
 #SBATCH -J csqa_jointlk_train         
 #SBATCH -o log.csqa_jointlk_train.txt        # 屏幕上的输出文件重定向到 test.out
 #SBATCH -e slurm-%j.err                      # 屏幕上的错误输出文件重定向到 slurm-%j.err , %j 会替换成jobid
@@ -59,6 +59,6 @@ for seed in 0; do
       --dev_statements  data/${dataset}/statement/dev.statement.jsonl \
       --test_statements  data/${dataset}/statement/test.statement.jsonl \
       --save_model \
-      --save_dir ${save_dir_pref}/${dataset}/gat-enc-${model}__k${k}__gnndim${gnndim}__bs${bs}__seed${seed}__${dt} $args \
+      --save_dir ${save_dir_pref}/${dataset}/gat-final-enc-${model}__k${k}__gnndim${gnndim}__bs${bs}__seed${seed}__${dt} $args \
   > logs/train_${dataset}__enc-${model}__k${k}__gnndim${gnndim}__bs${bs}__seed${seed}__${dt}.log.txt
 done
